@@ -1,0 +1,5 @@
+.gcp
+.env
+/secrets/
+/dockwork/
+
