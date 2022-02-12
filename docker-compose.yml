@@ -51,6 +51,8 @@ x-environment: &default-tz-puid-pgid
     TZ: $TZ
     PUID: $PUID
     PGID: $PGID
+    UID:  $PUID
+    GID:  $PGID
 
 # Proxy Network and Security
 x-network-and-security: &network-and-security
@@ -313,7 +315,7 @@ services:
 
   # Portainer - WebUI for Containers
   portainer:
-    <<: *common-do-not-start # See EXTENSION FIELDS at the top
+    #<<: *common-do-not-start # See EXTENSION FIELDS at the top
     <<: *common-keys-basic # See EXTENSION FIELDS at the top
     container_name: portainer
     image: portainer/portainer-ce:latest
@@ -370,7 +372,7 @@ services:
 
   # Organizr - Unified Frontend
   organizr:
-    #<<: *common-do-not-start # See EXTENSION FIELDS at the top
+    <<: *common-do-not-start # See EXTENSION FIELDS at the top
     <<: *common-keys-apps # See EXTENSION FIELDS at the top
     container_name: organizr
     hostname: organizr
@@ -424,6 +426,30 @@ services:
       - "traefik.http.routers.organizr-rtr.service=organizr-svc"
       - "traefik.http.services.organizr-svc.loadbalancer.server.port=80"
 
+  homer:
+    <<: *common-do-not-start # See EXTENSION FIELDS at the top
+    <<: *common-keys-apps # See EXTENSION FIELDS at the top
+    image: b4bz/homer
+    container_name: homer
+    networks:
+      - t2_proxy
+    volumes:
+      - $DOCKERDIR/appdata/homer/assets/:/www/assets
+    ports:
+      - $HOMER_PORT:8080
+    environment:
+      << : *default-tz-puid-pgid
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers
+      - "traefik.http.routers.homer-rtr.entrypoints=https"
+      - "traefik.http.routers.homer-rtr.rule=Host(`$DOMAINNAME0`,`homer.$DOMAINNAME0`)" 
+      - "traefik.http.routers.homer-rtr.tls=true"
+      ## Middlewares
+      - "traefik.http.routers.homer-rtr.middlewares=chain-oauth@file" 
+      ## HTTP Services
+      - "traefik.http.routers.homer-rtr.service=homer-svc"
+      - "traefik.http.services.homer-svc.loadbalancer.server.port=$HOMER_PORT"
 
 
   # nzbget - Binary newsgrabber (NZB downloader)
@@ -564,7 +590,7 @@ services:
 
   plex:
     <<: *common-keys-media # See EXTENSION FIELDS at the top
-    image: plexinc/pms-docker
+    image: plexinc/pms-docker:latest
     container_name: plex
     hostname: plex
     environment:
@@ -579,6 +605,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - $DOCKERDIR/appdata/plex/library:/config
       - /Volumes/vide00:/Volumes/vide00
+      - $DATADIR/data/transcode:/transcode
     networks:
       t2_proxy:
         ipv4_address: 192.168.90.122
@@ -693,10 +720,13 @@ services:
   # Readarr - Books management
   # Set url_base in readarr settings if using PathPrefix
   readarr:
-    #<<: *common-do-not-start # See EXTENSION FIELDS at the top
+    <<: *common-do-not-start # See EXTENSION FIELDS at the top
     <<: *common-keys-media # See EXTENSION FIELDS at the top
     image: hotio/readarr:nightly
     container_name: readarr
+    networks:
+      t2_proxy:
+        ipv4_address: 192.168.90.168
     ports:
       - "$READARR_PORT:8787"
     volumes:
@@ -720,6 +750,73 @@ services:
       - "traefik.http.routers.readarr-rtr.service=readarr-svc"
       - "traefik.http.services.readarr-svc.loadbalancer.server.port=8787"
 
+  # tdarr - Books management
+  tdarr:
+    <<: *common-do-not-start # See EXTENSION FIELDS at the top
+    <<: *common-keys-media # See EXTENSION FIELDS at the top
+    image: haveagitgat/tdarr:latest
+    container_name: tdarr
+    networks:
+    #  default:
+      t2_proxy:
+        ipv4_address: 192.168.90.169
+    ports:
+      - "$TDARR_WEB_PORT:8265"
+      - "$TDARR_SRV_PORT:8266"
+      - "$TDARR_NODE_PORT:8267"
+    environment:
+      <<: *default-tz-puid-pgid
+      UMASK: 002
+      serverIP: 0.0.0.0
+      serverPORT: $TDARR_SRV_PORT
+      iwebUIPort: $TDARR_WEB_PORT
+    volumes:
+      - $DOCKERDIR/appdata/tdarr/server:/app/server
+      - $DOCKERDIR/appdata/tdarr/configs:/app/configs
+      - $DOCKERDIR/appdata/tdarr/logs:/app/logs
+      - $DATADIR/data/transcode:/data:rw
+      - /Volumes/vide00:/data/media
+      - $DATADIR/temp:/temp
+      - "/etc/localtime:/etc/localtime:ro"
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers Auth
+      - "traefik.http.routers.tdarr-rtr.entrypoints=https"
+      - "traefik.http.routers.tdarr-rtr.rule=Host(`tdarr.$DOMAINNAME0`)"
+      ## Middlewares
+      - "traefik.http.routers.tdarr-rtr.middlewares=chain-oauth@file"
+      ## HTTP Services
+      - "traefik.http.routers.tdarr-rtr.service=tdarr-svc"
+      - "traefik.http.services.tdarr-svc.loadbalancer.server.port=8265"
+
+  tdarr-node:
+    <<: *common-do-not-start # See EXTENSION FIELDS at the top
+    <<: *common-keys-media # See EXTENSION FIELDS at the top
+    image: haveagitgat/tdarr_node:latest
+    container_name: tdarr_node
+    network_mode: service:tdarr
+#    networks:
+#      default:
+  #      ipv4_address: 192.168.90.170
+    #ports:
+    #  - "$TDARR_WEB_PORT:8265"
+    #  - "$TDARR_SRV_PORT:8266"
+    #  = "$TDARR_NODE_PORT:8267"
+    environment:
+      <<: *default-tz-puid-pgid
+      UMASK: 002
+      modeID: MainNode
+      serverIP: 0.0.0.0
+      serverPORT: $TDARR_SRV_PORT
+      nodeIP: 0.0.0.0
+      nodePORT: $TDARR_NODE_PORT
+
+    volumes:
+      - $DOCKERDIR/appdata/tdarr-node/configs:/app/configs
+      - $DOCKERDIR/appdata/tdarr-node/logs:/app/logs
+      - $DATADIR/data:/data:rw
+      - /Volumes/vide00:/data/media
+      - $DATADIR/temp:/temp
 
   calibre:
     <<: *common-do-not-start # See EXTENSION FIELDS at the top
@@ -891,10 +988,12 @@ services:
     volumes:
       - $DOCKERDIR/appdata/jaeger/jaeger-traefik.yml:/etc/jaeger-traefik.yml:ro
     labels:
-      - "traefik.http.routers.jaeger.rule=Host(`jaeger.$DOMAINNAME0`)"
-      - "traefik.http.routers.jaeger.entrypoints=http"
-      - "traefik.http.routers.jaeger.service=jaeger"
-      - "traefik.http.services.jaeger.loadbalancer.server.port=16686"
+      - "traefik.http.routers.jaeger-rtr.rule=Host(`jaeger.$DOMAINNAME0`)"
+      - "traefik.http.routers.jaeger-rtr.entrypoints=http"
+      ## Middlewares
+#      - "traefik.http.routers.jaeger-rtr.middlewares=chain-no-auth@file"
+      - "traefik.http.routers.jaeger-rtr.service=jaeger-svc"
+      - "traefik.http.services.jaeger-svc.loadbalancer.server.port=16686"
 
   netdata:
     container_name: netdata
@@ -910,7 +1009,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *default-tz-puid-pgid
-      DOCKER_HOST: tcp://socket-proxy:2375
+      DOCKER_HOST: socket-proxy:2375
       NETDATA_CLAIM_TOKEN: $NETDATA_CLAIM_TOKEN
       NETDATA_CLAIM_URL: https://app.netdata.cloud
       NETDATA_CLAIM_ROOMS: $NETDATA_CLAIM_ROOMS
