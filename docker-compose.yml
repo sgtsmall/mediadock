@@ -41,6 +41,9 @@ secrets:
     file: $SECRETSDIR/traefik_forward_auth
   secret_dns:
     file: $SECRETSDIR/gcp-service.json
+  #guac_db_name:
+  #guac_mysql_user:
+  #guac_mysql_password:
 
 ########################### EXTENSION FIELDS
 # Helps eliminate repetition of sections
@@ -652,8 +655,7 @@ services:
     volumes:
       - $DOCKERDIR/appdata/radarr:/config
       # Optional. See why MediaCover is mounted as volume https://github.com/htpcBeginner/docker-traefik/discussions/147
-      - $DATADIR/temp/docker/appdata/radarr/MediaCover:/config/MediaCover
-      #- $DATADIR/downloads:/data/downloads
+      - $DATADIR/temp/radarr/MediaCover:/config/MediaCover
       - $DATADIR/data:/data:rw
       - /Volumes/vide00:/data/media
       - "/etc/localtime:/etc/localtime:ro"
@@ -692,8 +694,7 @@ services:
     volumes:
       - $DOCKERDIR/appdata/sonarr:/config
       # Optional. See why MediaCover is mounted as volume https://github.com/htpcBeginner/docker-traefik/discussions/147
-      - $DATADIR/temp/docker/appdata/sonarr/MediaCover:/config/MediaCover
-      #- $DATADIR/downloads:/data/downloads
+      - $DATADIR/temp/sonarr/MediaCover:/config/MediaCover
       - $DATADIR/data:/data:rw
       - /Volumes/vide00:/data/media
       - "/etc/localtime:/etc/localtime:ro"
@@ -731,7 +732,7 @@ services:
       - "$READARR_PORT:8787"
     volumes:
       - $DOCKERDIR/appdata/readarr:/config
-      #- $DATADIR/downloads:/data/downloads
+      - $DATADIR/temp/sonarr/MediaCover:/config/MediaCover
       - $DATADIR/data:/data:rw
       - /Volumes/vide00/Books:/data/media/books
       - "/etc/localtime:/etc/localtime:ro"
@@ -913,41 +914,63 @@ services:
 
 
 
-#  # qDirStat - Directory Statistics
-#  qdirstat:
-#    <<: *common-do-not-start # See EXTENSION FIELDS at the top
-#    <<: *common-keys-media # See EXTENSION FIELDS at the top
-#    <<: *common-keys-apps # See EXTENSION FIELDS at the top
-#    image: jlesage/qdirstat:latest
-#    container_name: qdirstat
-#    # ports:
-#    #   - "$QDIRSTAT_PORT:5800"
-#    volumes:
-#      - $USERDIR:/data/home:ro
-#      - $DOCKERDIR/appdata/qdirstat/config:/config:rw
-#      - /media/data:/data/data:ro
-#    environment:
-#      USER_ID: $PUID
-#      GROUP_ID: $PGID
-#      UMASK: 002
-#      TZ: $TZ
-#      KEEP_APP_RUNNING: 1
-#      CLEAN_TMP_DIR: 1
-#      DISPLAY_WIDTH: 1600
-#      DISPLAY_HEIGHT: 960
-#      VNC_PASSWORD: $QDIRSTAT_VNC_PASSWD
-#    labels:
-#      - "traefik.enable=true"
-#      ## HTTP Routers
-#      - "traefik.http.routers.qdirstat-rtr.entrypoints=https"
-#      - "traefik.http.routers.qdirstat-rtr.rule=Host(`qdirstat.$DOMAINNAME0`)"
-#      ## Middlewares
-#      - "traefik.http.routers.qdirstat-rtr.middlewares=chain-oauth@file"
-#      ## HTTP Services
-#      - "traefik.http.routers.qdirstat-rtr.service=qdirstat-svc"
-#      - "traefik.http.services.qdirstat-svc.loadbalancer.server.port=5800"
+  # qDirStat - Directory Statistics
+  qdirstat:
+    #<<: *common-do-not-start # See EXTENSION FIELDS at the top
+    <<: *common-keys-media # See EXTENSION FIELDS at the top
+    <<: *common-keys-apps # See EXTENSION FIELDS at the top
+    image: jlesage/qdirstat:latest
+    container_name: qdirstat
+    ports:
+      - "$QDIRSTAT_PORT:5800"
+    volumes:
+      - $USERDIR:/data/home:ro
+      - $DOCKERDIR/appdata/qdirstat/config:/config:rw
+      - /media/data:/data/data:ro
+    environment:
+      USER_ID: $PUID
+      GROUP_ID: $PGID
+      UMASK: 002
+      TZ: $TZ
+      KEEP_APP_RUNNING: 1
+      CLEAN_TMP_DIR: 1
+      DISPLAY_WIDTH: 1600
+      DISPLAY_HEIGHT: 960
+      VNC_PASSWORD: $QDIRSTAT_VNC_PASSWD
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers
+      - "traefik.http.routers.qdirstat-rtr.entrypoints=https"
+      - "traefik.http.routers.qdirstat-rtr.rule=Host(`qdirstat.$DOMAINNAME0`)"
+      ## Middlewares
+      - "traefik.http.routers.qdirstat-rtr.middlewares=chain-oauth@file"
+      ## HTTP Services
+      - "traefik.http.routers.qdirstat-rtr.service=qdirstat-svc"
+      - "traefik.http.services.qdirstat-svc.loadbalancer.server.port=5800"
 
   ############################# MAINTENANCE
+#  # Docker Image Update Notifier
+#  diun:
+#    #<<: *common-do-not-start # See EXTENSION FIELDS at the top
+#    <<: *common-keys-apps # See EXTENSION FIELDS at the top
+#    image: crazymax/diun:latest
+#    container_name: diun
+#    command: serve
+#    networks:
+#      - socket_proxy
+#    volumes:
+#      - "$DOCKERDIR/appdata/diun:/data"
+#      #- "/var/run/docker.sock:/var/run/docker.sock"
+#    environment:
+#      <<: *default-tz-puid-pgid
+#      LOG_LEVEL: info
+#      LOG_JSON: false
+#      DIUN_WATCH_WORKERS: 20
+#      DIUN_WATCH_SCHEDULE: "0 */6 * * *""
+#      DIUN_PROVIDERS_DOCKER: true
+#      DOCKER_HOST: tcp://socket-proxy:2375
+#    labels:
+#      - "diun.enable=true"
 
   # Docker-GC - Automatic Docker Garbage Collection
   # Create docker-gc-exclude file
